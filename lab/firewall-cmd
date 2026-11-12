@@ -1,0 +1,81 @@
+#!/bin/sh
+# PATH stub: log --set-default-zone instead of talking to firewalld.
+set -eu
+
+WITNESS="/witness/firewall-cmd.log"
+STATE="/witness/default-zone"
+MARKER="WEBMIN-H24-FIREWALLD-CSRF"
+
+umask 000
+mkdir -p /witness
+if [ ! -f "$STATE" ]; then
+    echo public > "$STATE"
+fi
+default=$(tr -d ' \n' < "$STATE")
+
+zone_block() {
+    name="$1"
+    if [ "$name" = "$default" ]; then
+        printf '%s (default)\n' "$name"
+    else
+        printf '%s\n' "$name"
+    fi
+    if [ "$name" = "trusted" ]; then
+        printf '  target: ACCEPT\n'
+    else
+        printf '  target: default\n'
+    fi
+    printf '  icmp-block-inversion: no\n'
+    printf '  interfaces:\n'
+    printf '  sources:\n'
+    printf '  services: ssh dhcpv6-client\n'
+    printf '  ports:\n'
+    printf '  protocols:\n'
+    printf '  forward: no\n'
+    printf '  masquerade: no\n'
+    printf '  forward-ports:\n'
+    printf '  source-ports:\n'
+    printf '  icmp-blocks:\n'
+}
+
+set_zone=""
+prev=""
+for arg in "$@"; do
+    case "$prev" in
+        --set-default-zone)
+            set_zone="$arg"
+            ;;
+    esac
+    case "$arg" in
+        --state)
+            echo running
+            exit 0
+            ;;
+        --get-default-zone)
+            echo "$default"
+            exit 0
+            ;;
+        --list-all-zones)
+            zone_block public
+            echo
+            zone_block trusted
+            echo
+            zone_block drop
+            exit 0
+            ;;
+        --set-default-zone=*)
+            set_zone="${arg#--set-default-zone=}"
+            ;;
+    esac
+    prev="$arg"
+done
+
+if [ -n "$set_zone" ]; then
+    printf '%s --set-default-zone %s argv=%s\n' "$MARKER" "$set_zone" "$*" >> "$WITNESS"
+    chmod 666 "$WITNESS" 2>/dev/null || true
+    echo "$set_zone" > "$STATE"
+    chmod 666 "$STATE" 2>/dev/null || true
+    exit 0
+fi
+
+exit 0

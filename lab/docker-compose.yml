@@ -1,0 +1,39 @@
+name: webminh24
+
+services:
+  webmin:
+    image: webmin-lab:2.670
+    pull_policy: never
+    init: true
+    user: "0:0"
+    ports:
+      - "127.0.0.1:18450:10000"
+    volumes:
+      - ./firewall-cmd:/lab/firewall-cmd:ro
+      - ./witness:/witness
+    environment:
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /witness /etc/webmin/firewalld /usr/local/bin
+        cp /lab/firewall-cmd /usr/local/bin/firewall-cmd
+        cp /lab/firewall-cmd /usr/bin/firewall-cmd
+        chmod 0755 /usr/local/bin/firewall-cmd /usr/bin/firewall-cmd
+        conf=/etc/webmin/firewalld/config
+        if [ -f "$$conf" ]; then
+          if grep -q '^firewall_cmd=' "$$conf"; then
+            sed -i 's|^firewall_cmd=.*|firewall_cmd=/usr/local/bin/firewall-cmd|' "$$conf"
+          else
+            echo 'firewall_cmd=/usr/local/bin/firewall-cmd' >> "$$conf"
+          fi
+        else
+          printf '%s\n' 'firewall_cmd=/usr/local/bin/firewall-cmd' 'init_name=firewalld' > "$$conf"
+        fi
+        exec /usr/bin/perl /usr/share/webmin/miniserv.pl --nofork /etc/webmin/miniserv.conf
+    labels:
+      lab: WEBMIN-H24-FIREWALLD-CSRF
+    mem_limit: 512m
+    restart: "no"
